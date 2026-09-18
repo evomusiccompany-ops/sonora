@@ -1,0 +1,8 @@
+{
+  "name": "Remix Sonora - Music \u0026 Creator Platform",
+  "description": "Plataforma de streaming musical y videoclips con panel de creador, reproductor global, analíticas, simulador de anuncios y arquitectura de software.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
