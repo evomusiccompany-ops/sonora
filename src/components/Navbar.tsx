@@ -18,12 +18,13 @@ import {
 interface NavbarProps {
   currentUser: User | null;
   activeRole?: UserRole;
-  currentTab: 'stream' | 'studio' | 'admin' | 'architecture';
-  onSelectTab: (tab: 'stream' | 'studio' | 'admin' | 'architecture') => void;
+  currentTab: 'stream' | 'studio' | 'admin' | 'architecture' | 'profile';
+  onSelectTab: (tab: 'stream' | 'studio' | 'admin' | 'architecture' | 'profile') => void;
   isOfflineMode: boolean;
   onToggleOffline: () => void;
   onOpenAuthModal: () => void;
   onOpenProfileModal: () => void;
+  onNavigateToProfile?: () => void;
   onOpenSettingsModal: () => void;
   onSignOut: () => void;
   adCounter: { current: number; threshold: number };
@@ -37,6 +38,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleOffline,
   onOpenAuthModal,
   onOpenProfileModal,
+  onNavigateToProfile,
   onOpenSettingsModal,
   onSignOut,
   adCounter
@@ -137,11 +139,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                   : 'bg-zinc-900/80 hover:bg-zinc-800 border-zinc-700/60'
               }`}
             >
-              <img 
-                src={currentUser.avatar} 
-                alt={currentUser.name} 
-                className="w-7 h-7 rounded-full object-cover border border-[#1DB954]/50 bg-zinc-800"
-              />
+              {currentUser.avatar ? (
+                <img 
+                  src={currentUser.avatar} 
+                  alt={currentUser.name} 
+                  className="w-7 h-7 rounded-full object-cover border border-[#1DB954]/50 bg-zinc-800"
+                />
+              ) : (
+                <div className="w-7 h-7 rounded-full bg-[#1DB954] text-black font-extrabold text-[10px] flex items-center justify-center border border-[#1DB954]/50">
+                  {(currentUser.name || 'U').substring(0, 2).toUpperCase()}
+                </div>
+              )}
               <div className="hidden sm:block text-left pr-1">
                 <div className="flex items-center gap-1 leading-tight">
                   <span className="text-xs font-bold text-zinc-200 group-hover:text-white truncate max-w-[100px]">
@@ -169,13 +177,33 @@ export const Navbar: React.FC<NavbarProps> = ({
                 className="absolute right-0 mt-2 w-64 bg-[#151722] border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden py-1.5 z-50 animate-fadeIn"
               >
                 {/* User quick card header */}
-                <div className="px-4 py-3 border-b border-zinc-800/80 bg-zinc-900/40">
+                <div 
+                  onClick={() => {
+                    setIsDropdownOpen(false);
+                    if (onNavigateToProfile) {
+                      onNavigateToProfile();
+                    } else {
+                      onSelectTab('profile');
+                    }
+                    if (window.history && window.history.pushState) {
+                      window.history.pushState({}, '', '/perfil');
+                    }
+                  }}
+                  className="px-4 py-3 border-b border-zinc-800/80 bg-zinc-900/40 hover:bg-zinc-800/50 cursor-pointer transition"
+                  title="Ir al perfil"
+                >
                   <div className="flex items-center gap-2.5">
-                    <img 
-                      src={currentUser.avatar} 
-                      alt={currentUser.name} 
-                      className="w-9 h-9 rounded-full object-cover border border-[#1DB954]/40 bg-zinc-800"
-                    />
+                    {currentUser.avatar ? (
+                      <img 
+                        src={currentUser.avatar} 
+                        alt={currentUser.name} 
+                        className="w-9 h-9 rounded-full object-cover border border-[#1DB954]/40 bg-zinc-800"
+                      />
+                    ) : (
+                      <div className="w-9 h-9 rounded-full bg-[#1DB954] text-black font-extrabold text-xs flex items-center justify-center border border-[#1DB954]/40">
+                        {(currentUser.name || 'U').substring(0, 2).toUpperCase()}
+                      </div>
+                    )}
                     <div className="truncate">
                       <div className="text-xs font-bold text-white truncate">
                         {currentUser.stageName || currentUser.name}
@@ -222,7 +250,14 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <button
                     onClick={() => {
                       setIsDropdownOpen(false);
-                      onOpenProfileModal();
+                      if (onNavigateToProfile) {
+                        onNavigateToProfile();
+                      } else {
+                        onSelectTab('profile');
+                      }
+                      if (window.history && window.history.pushState) {
+                        window.history.pushState({}, '', '/perfil');
+                      }
                     }}
                     id="menu-opt-profile"
                     className="w-full px-4 py-2.5 text-xs text-zinc-200 hover:text-white hover:bg-zinc-800/60 flex items-center gap-2.5 transition text-left"

@@ -5,6 +5,7 @@ export interface User {
   name: string;
   email: string;
   avatar: string;
+  banner?: string;
   role: UserRole;
   stageName?: string;
   bio?: string;

@@ -22,11 +22,18 @@ import { ArchitectureDoc } from './components/ArchitectureDoc';
 import { AuthModal } from './components/AuthModal';
 import { UserProfileModal } from './components/UserProfileModal';
 import { SettingsModal } from './components/SettingsModal';
+import { ProfilePage } from './pages/ProfilePage';
+import { useAuth } from './context/AuthContext';
 
 export default function App() {
-  // Users & Session State (Clean default for visitors, synced via Supabase Auth)
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [currentTab, setCurrentTab] = useState<'stream' | 'studio' | 'admin' | 'architecture'>('stream');
+  // Users & Session State synced via AuthContext & Supabase
+  const { currentUser, setCurrentUser, signOut } = useAuth();
+  const [currentTab, setCurrentTab] = useState<'stream' | 'studio' | 'admin' | 'architecture' | 'profile'>(() => {
+    if (typeof window !== 'undefined' && window.location.pathname.includes('/perfil')) {
+      return 'profile';
+    }
+    return 'stream';
+  });
   
   // Modals
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -64,98 +71,8 @@ export default function App() {
   const [creatorAnalytics, setCreatorAnalytics] = useState<CreatorAnalytics>(INITIAL_CREATOR_ANALYTICS);
   const [adminMetrics, setAdminMetrics] = useState<AdminMetrics>(INITIAL_ADMIN_METRICS);
 
-  // Ref to track playback progress without re-renders loop
+  // Playback timer ref
   const progressTimerRef = useRef<number | null>(null);
-
-  // Sync Supabase Auth listener on mount
-  useEffect(() => {
-    const client = supabase;
-    if (!client) return;
-
-    // Check existing session
-    client.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        // Fetch user profile from database table 'users'
-        client
-          .from('users')
-          .select('*')
-          .eq('id', session.user.id)
-          .single()
-          .then(({ data: profileData }) => {
-            if (profileData) {
-              const mappedRole = profileData.role === 'artist' ? 'creator' : profileData.role || 'listener';
-              setCurrentUser({
-                id: session.user.id,
-                name: profileData.name || session.user.email?.split('@')[0] || 'Usuario',
-                stageName: profileData.stage_name || undefined,
-                email: session.user.email || profileData.email || '',
-                role: mappedRole,
-                avatar: mappedRole === 'creator'
-                  ? 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=300&q=80'
-                  : 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=300&q=80',
-                verified: mappedRole === 'creator',
-                followersCount: 0,
-                plan: 'free',
-                createdAt: profileData.created_at || new Date().toISOString().split('T')[0]
-              });
-            }
-          });
-      }
-    });
-
-    const { data: authSubscription } = client.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_OUT') {
-        setCurrentUser(null);
-        setCurrentTab('stream');
-      } else if (event === 'SIGNED_IN' && session?.user) {
-        const { data: profile } = await client
-          .from('users')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-
-        const storedPreferredRole = localStorage.getItem('sonora_preferred_role');
-        const role = profile?.role === 'artist' || profile?.role === 'creator'
-          ? 'creator'
-          : (storedPreferredRole === 'creator' ? 'creator' : (profile?.role || 'listener'));
-
-        // If newly signed in with Google and user had preferred creator, update profile table
-        if (storedPreferredRole && (!profile || !profile.role)) {
-          client.from('users').upsert([
-            {
-              id: session.user.id,
-              email: session.user.email || '',
-              name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Usuario',
-              role: storedPreferredRole === 'creator' ? 'artist' : 'listener',
-              avatar_url: session.user.user_metadata?.avatar_url || null
-            }
-          ]).then(() => {
-            localStorage.removeItem('sonora_preferred_role');
-          });
-        }
-
-        const userObj: User = {
-          id: session.user.id,
-          name: profile?.name || session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Usuario',
-          stageName: profile?.stage_name || undefined,
-          email: session.user.email || profile?.email || '',
-          role,
-          avatar: session.user.user_metadata?.avatar_url || (role === 'creator'
-            ? 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=300&q=80'
-            : 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=300&q=80'),
-          verified: role === 'creator',
-          followersCount: 0,
-          plan: 'free',
-          createdAt: profile?.created_at || new Date().toISOString().split('T')[0]
-        };
-        setCurrentUser(userObj);
-      }
-    });
-
-    return () => {
-      authSubscription.subscription.unsubscribe();
-    };
-  }, []);
 
   // Fetch tracks from Supabase getTracks()
   const loadTracks = useCallback(async () => {
@@ -398,14 +315,10 @@ export default function App() {
   // Sign out handler
   const handleSignOut = async () => {
     try {
-      if (supabase) {
-        await supabase.auth.signOut();
-      }
+      await signOut();
     } catch (err) {
-      console.warn('Supabase signout warning:', err);
+      console.warn('Signout warning:', err);
     } finally {
-      // Clear local session state and redirect to stream tab
-      setCurrentUser(null);
       setCurrentTab('stream');
     }
   };
@@ -422,6 +335,12 @@ export default function App() {
         onToggleOffline={() => setIsOfflineMode(!isOfflineMode)}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
         onOpenProfileModal={() => setIsProfileModalOpen(true)}
+        onNavigateToProfile={() => {
+          setCurrentTab('profile');
+          if (typeof window !== 'undefined' && window.history?.pushState) {
+            window.history.pushState({}, '', '/perfil');
+          }
+        }}
         onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
         onSignOut={handleSignOut}
         adCounter={adCounter}
@@ -477,6 +396,22 @@ export default function App() {
 
         {/* Tab 4: Arquitectura de Software & Backend */}
         {currentTab === 'architecture' && <ArchitectureDoc />}
+
+        {/* Tab 5: Vista de Perfil (/perfil) */}
+        {currentTab === 'profile' && currentUser && (
+          <ProfilePage
+            user={currentUser}
+            onUpdateUser={(updatedUser) => {
+              setCurrentUser(updatedUser);
+            }}
+            onBack={() => {
+              setCurrentTab('stream');
+              if (typeof window !== 'undefined' && window.history?.pushState) {
+                window.history.pushState({}, '', '/');
+              }
+            }}
+          />
+        )}
       </main>
 
       {/* Persistent Global Audio Player Bar (Spotify style) */}
@@ -574,6 +509,12 @@ export default function App() {
           user={currentUser}
           isOpen={isProfileModalOpen}
           onClose={() => setIsProfileModalOpen(false)}
+          onEditProfile={() => {
+            setCurrentTab('profile');
+            if (typeof window !== 'undefined' && window.history?.pushState) {
+              window.history.pushState({}, '', '/perfil');
+            }
+          }}
           onGoToStudio={() => {
             setCurrentTab('studio');
           }}

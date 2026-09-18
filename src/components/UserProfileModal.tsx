@@ -19,13 +19,15 @@ interface UserProfileModalProps {
   isOpen: boolean;
   onClose: () => void;
   onGoToStudio?: () => void;
+  onEditProfile?: () => void;
 }
 
 export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   user,
   isOpen,
   onClose,
-  onGoToStudio
+  onGoToStudio,
+  onEditProfile
 }) => {
   if (!isOpen) return null;
 
@@ -126,18 +128,35 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             </span>
           </div>
 
-          {isArtist && onGoToStudio && (
-            <button
-              onClick={() => {
-                onClose();
-                onGoToStudio();
-              }}
-              className="w-full mt-5 bg-[#1DB954] hover:bg-[#1ed760] text-black font-bold py-2.5 rounded-xl transition flex items-center justify-center gap-2 text-xs"
-            >
-              <Music className="w-4 h-4" />
-              Ir a mi Panel de Creador / Studio
-            </button>
-          )}
+          {/* Action buttons */}
+          <div className="mt-5 flex flex-col gap-2">
+            {onEditProfile && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onEditProfile();
+                }}
+                id="modal-edit-profile-btn"
+                className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-2.5 rounded-xl border border-zinc-700 transition flex items-center justify-center gap-2 text-xs"
+              >
+                <UserIcon className="w-4 h-4 text-[#1DB954]" />
+                <span>Editar Perfil y Fotos</span>
+              </button>
+            )}
+
+            {isArtist && onGoToStudio && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onGoToStudio();
+                }}
+                className="w-full bg-[#1DB954] hover:bg-[#1ed760] text-black font-bold py-2.5 rounded-xl transition flex items-center justify-center gap-2 text-xs"
+              >
+                <Music className="w-4 h-4" />
+                <span>Ir a mi Panel de Creador / Studio</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
