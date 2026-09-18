@@ -135,7 +135,7 @@ export async function getTracks(): Promise<Track[]> {
 }
 
 /**
- * Creates or uploads a new track to Supabase.
+ * Creates or uploads a new track to Supabase 'tracks' (or fallback 'songs') table.
  */
 export async function createTrack(track: Track): Promise<boolean> {
   const client = getSupabase();
@@ -143,34 +143,58 @@ export async function createTrack(track: Track): Promise<boolean> {
     return false;
   }
 
+  const trackPayload = {
+    id: track.id,
+    title: track.title,
+    artist_id: track.artistId,
+    artist_name: track.artistName,
+    artist_avatar: track.artistAvatar,
+    album_name: track.albumName,
+    release_type: track.releaseType,
+    cover_url: track.coverUrl,
+    media_url: track.mediaUrl,
+    media_type: track.mediaType,
+    video_orientation: track.videoOrientation,
+    duration_seconds: track.duration,
+    genre: track.genre,
+    release_date: track.releaseDate,
+    plays_count: track.plays,
+    likes_count: track.likes,
+    monetization_enabled: track.monetizationEnabled,
+    ad_frequency_plays: track.adFrequencyPlays,
+    bpm: track.bpm,
+    lyrics: track.lyrics,
+  };
+
   try {
-    const { error } = await client.from('tracks').insert([
+    // Attempt inserting into 'tracks' table first
+    const { error: tracksError } = await client.from('tracks').insert([trackPayload]);
+
+    if (!tracksError) {
+      return true;
+    }
+
+    console.warn('Notice on tracks table insert, attempting fallback to songs table:', tracksError.message);
+
+    // If 'tracks' table doesn't exist or failed, attempt 'songs' table as fallback
+    const { error: songsError } = await client.from('songs').insert([
       {
         id: track.id,
         title: track.title,
         artist_id: track.artistId,
-        artist_name: track.artistName,
-        artist_avatar: track.artistAvatar,
-        album_name: track.albumName,
-        release_type: track.releaseType,
+        artist: track.artistName,
+        album: track.albumName,
         cover_url: track.coverUrl,
+        audio_url: track.mediaUrl,
         media_url: track.mediaUrl,
-        media_type: track.mediaType,
-        video_orientation: track.videoOrientation,
-        duration_seconds: track.duration,
+        duration: track.duration,
         genre: track.genre,
-        release_date: track.releaseDate,
-        plays_count: track.plays,
-        likes_count: track.likes,
-        monetization_enabled: track.monetizationEnabled,
-        ad_frequency_plays: track.adFrequencyPlays,
-        bpm: track.bpm,
-        lyrics: track.lyrics,
-      },
+        created_at: new Date().toISOString()
+      }
     ]);
 
-    if (error) {
-      console.warn('Error inserting track in Supabase:', error.message);
+    if (songsError) {
+      console.warn('Error inserting into songs table:', songsError.message);
       return false;
     }
     return true;

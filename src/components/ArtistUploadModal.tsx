@@ -11,8 +11,11 @@ import {
   Sparkles,
   FileAudio,
   Radio,
-  Sliders
+  Sliders,
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
+import { uploadAudioFile, uploadCoverImage } from '../lib/storage';
 
 interface ArtistUploadModalProps {
   isOpen: boolean;
@@ -47,7 +50,14 @@ export const ArtistUploadModal: React.FC<ArtistUploadModalProps> = ({
   const [albumName, setAlbumName] = useState('Nuevo Sencillo');
   const [releaseType, setReleaseType] = useState<ReleaseType>('single');
   const [genre, setGenre] = useState<Genre>('Urban / Reggaeton');
+  
+  // Storage files
+  const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  
+  // URLs & Previews
   const [coverUrl, setCoverUrl] = useState('');
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [mediaUrl, setMediaUrl] = useState('');
   const [fileName, setFileName] = useState('');
   const [fileDuration, setFileDuration] = useState(180);
@@ -55,7 +65,11 @@ export const ArtistUploadModal: React.FC<ArtistUploadModalProps> = ({
   const [monetizationEnabled, setMonetizationEnabled] = useState(true);
   const [adFrequency, setAdFrequency] = useState(3);
   const [lyricsInput, setLyricsInput] = useState('');
+  
+  // Upload status
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgressText, setUploadProgressText] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const coverInputRef = useRef<HTMLInputElement | null>(null);
@@ -66,7 +80,10 @@ export const ArtistUploadModal: React.FC<ArtistUploadModalProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setAudioFile(file);
     setFileName(file.name);
+    setErrorMessage(null);
+
     // If it's a video file, auto select video type
     if (file.type.startsWith('video/')) {
       setMediaType('video');
@@ -74,11 +91,11 @@ export const ArtistUploadModal: React.FC<ArtistUploadModalProps> = ({
       setMediaType('audio');
     }
 
-    // Create a local blob object url so it can be streamed directly in the browser!
+    // Create a local preview URL
     const objectUrl = URL.createObjectURL(file);
     setMediaUrl(objectUrl);
 
-    // Auto extract duration if possible
+    // Auto extract duration
     if (file.type.startsWith('audio/')) {
       const audio = new Audio(objectUrl);
       audio.onloadedmetadata = () => {
@@ -107,18 +124,58 @@ export const ArtistUploadModal: React.FC<ArtistUploadModalProps> = ({
   const handleCoverFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setCoverFile(file);
       const url = URL.createObjectURL(file);
+      setCoverPreview(url);
       setCoverUrl(url);
+      setErrorMessage(null);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim()) {
+      setErrorMessage('Por favor ingresa un título para la obra.');
+      return;
+    }
 
     setIsUploading(true);
+    setErrorMessage(null);
 
-    setTimeout(() => {
+    try {
+      let finalAudioUrl = mediaUrl;
+      let finalCoverUrl = coverUrl;
+
+      // 1. Upload audio / media file to Supabase Storage 'audio' bucket
+      if (audioFile) {
+        setUploadProgressText('Subiendo pista a Supabase Storage (bucket: audio)...');
+        const audioResult = await uploadAudioFile(audioFile, artistId);
+        if (audioResult.publicUrl) {
+          finalAudioUrl = audioResult.publicUrl;
+        }
+      }
+
+      // 2. Upload cover artwork to Supabase Storage 'covers' bucket
+      if (coverFile) {
+        setUploadProgressText('Subiendo portada a Supabase Storage (bucket: covers)...');
+        const coverResult = await uploadCoverImage(coverFile, artistId);
+        if (coverResult.publicUrl) {
+          finalCoverUrl = coverResult.publicUrl;
+        }
+      }
+
+      // Fallbacks if no files were selected
+      if (!finalCoverUrl) {
+        finalCoverUrl = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=600&q=80';
+      }
+      if (!finalAudioUrl) {
+        finalAudioUrl = mediaType === 'video' 
+          ? 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4' 
+          : 'virtual://user-uploaded-track';
+      }
+
+      setUploadProgressText('Registrando canción en la base de datos...');
+
       const newTrack: Track = {
         id: `track-${Date.now()}`,
         title: title.trim(),
@@ -127,8 +184,8 @@ export const ArtistUploadModal: React.FC<ArtistUploadModalProps> = ({
         artistAvatar,
         albumName: albumName.trim() || 'Sencillo 2026',
         releaseType,
-        coverUrl: coverUrl.trim() || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=600&q=80',
-        mediaUrl: mediaUrl || (mediaType === 'video' ? 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4' : 'virtual://user-uploaded-track'),
+        coverUrl: finalCoverUrl,
+        mediaUrl: finalAudioUrl,
         mediaType,
         videoOrientation: mediaType === 'video' ? videoOrientation : undefined,
         duration: fileDuration || 190,
@@ -142,10 +199,16 @@ export const ArtistUploadModal: React.FC<ArtistUploadModalProps> = ({
         bpm: 110
       };
 
-      onTrackCreated(newTrack);
+      // Notify parent to append track and insert into Supabase ('tracks' or 'songs' table)
+      await onTrackCreated(newTrack);
+
       setIsUploading(false);
       onClose();
-    }, 600);
+    } catch (err: any) {
+      console.error('Error during upload submission:', err);
+      setErrorMessage(err.message || 'Ocurrió un error al subir los archivos.');
+      setIsUploading(false);
+    }
   };
 
   return (
@@ -161,17 +224,26 @@ export const ArtistUploadModal: React.FC<ArtistUploadModalProps> = ({
               <UploadCloud className="w-4 h-4 text-[#1DB954]" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-white">Subir Contenido Multimedia</h2>
-              <p className="text-xs text-zinc-400">Audio (MP3/WAV) o Video (MP4/WebM) con monetización</p>
+              <h2 className="text-sm font-bold text-white">Subir Canción a Sonora (Supabase Storage)</h2>
+              <p className="text-xs text-zinc-400">Archivos a buckets 'audio' y 'covers' + registro de pista</p>
             </div>
           </div>
           <button 
             onClick={onClose}
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+            disabled={isUploading}
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors disabled:opacity-50"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        {/* Error notification banner */}
+        {errorMessage && (
+          <div className="px-6 py-3 bg-red-500/10 border-b border-red-500/20 text-red-400 text-xs flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-5 flex-1 text-xs">
@@ -189,7 +261,7 @@ export const ArtistUploadModal: React.FC<ArtistUploadModalProps> = ({
                 }`}
               >
                 <Music className="w-4 h-4" />
-                <span>Pista de Audio (Música / Podcast)</span>
+                <span>Pista de Audio (.mp3, .wav)</span>
               </button>
 
               <button
@@ -202,42 +274,98 @@ export const ArtistUploadModal: React.FC<ArtistUploadModalProps> = ({
                 }`}
               >
                 <Film className="w-4 h-4" />
-                <span>Video (Videoclip / Reel Vertical)</span>
+                <span>Video (Videoclip / Reel)</span>
               </button>
             </div>
           </div>
 
-          {/* Media File Dropzone */}
-          <div 
-            onClick={() => fileInputRef.current?.click()}
-            className="border-2 border-dashed border-zinc-700 hover:border-[#1DB954] rounded-2xl p-5 text-center cursor-pointer bg-zinc-900/40 hover:bg-zinc-900/70 transition-all flex flex-col items-center justify-center gap-2 group"
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept={mediaType === 'audio' ? 'audio/mp3,audio/wav,audio/mpeg,audio/*' : 'video/mp4,video/webm,video/*'}
-              onChange={handleMediaFileChange}
-              className="hidden"
-            />
-            <div className="w-12 h-12 rounded-full bg-zinc-800 group-hover:bg-[#1DB954]/20 flex items-center justify-center transition-colors">
-              {fileName ? (
-                <Check className="w-6 h-6 text-[#1DB954]" />
-              ) : mediaType === 'audio' ? (
-                <FileAudio className="w-6 h-6 text-zinc-400 group-hover:text-[#1DB954]" />
-              ) : (
-                <Film className="w-6 h-6 text-zinc-400 group-hover:text-[#1DB954]" />
-              )}
-            </div>
+          {/* Media File Dropzone (Audio .mp3 / .wav) */}
+          <div className="space-y-1.5">
+            <label className="font-semibold text-zinc-300 flex items-center justify-between">
+              <span>Archivo de Audio Principal (.mp3, .wav) *</span>
+              <span className="text-[10px] text-[#1DB954] font-medium">Bucket: audio</span>
+            </label>
+            <div 
+              onClick={() => fileInputRef.current?.click()}
+              className={`border-2 border-dashed rounded-2xl p-5 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 group ${
+                audioFile 
+                  ? 'border-[#1DB954] bg-[#1DB954]/5' 
+                  : 'border-zinc-700 hover:border-[#1DB954] bg-zinc-900/40 hover:bg-zinc-900/70'
+              }`}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={mediaType === 'audio' ? '.mp3,.wav,audio/mp3,audio/wav,audio/mpeg,audio/*' : '.mp4,.webm,video/mp4,video/*'}
+                onChange={handleMediaFileChange}
+                className="hidden"
+              />
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
+                audioFile ? 'bg-[#1DB954]/20 text-[#1DB954]' : 'bg-zinc-800 text-zinc-400 group-hover:text-[#1DB954]'
+              }`}>
+                {audioFile ? (
+                  <Check className="w-6 h-6 text-[#1DB954]" />
+                ) : mediaType === 'audio' ? (
+                  <FileAudio className="w-6 h-6" />
+                ) : (
+                  <Film className="w-6 h-6" />
+                )}
+              </div>
 
-            <div>
-              <p className="font-bold text-sm text-white">
-                {fileName ? fileName : `Selecciona o arrastra tu archivo ${mediaType === 'audio' ? 'MP3 / WAV' : 'MP4'}`}
-              </p>
-              <p className="text-[11px] text-zinc-400 mt-0.5">
-                {fileName 
-                  ? `Duración detectada: ~${fileDuration}s` 
-                  : 'Máximo 200MB. Transcodificación automática en edge CDN.'}
-              </p>
+              <div>
+                <p className="font-bold text-sm text-white">
+                  {audioFile ? audioFile.name : `Seleccionar archivo ${mediaType === 'audio' ? '.mp3 / .wav' : '.mp4'}`}
+                </p>
+                <p className="text-[11px] text-zinc-400 mt-0.5">
+                  {audioFile 
+                    ? `Tamaño: ${(audioFile.size / (1024 * 1024)).toFixed(2)} MB • Duración: ~${fileDuration}s` 
+                    : 'Haz clic para explorar tus archivos locales.'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Cover Art Dropzone & Selector (Bucket: covers) */}
+          <div className="space-y-1.5">
+            <label className="font-semibold text-zinc-300 flex items-center justify-between">
+              <span>Imagen de Portada (Cover Art .jpg, .png)</span>
+              <span className="text-[10px] text-purple-400 font-medium">Bucket: covers</span>
+            </label>
+            <div className="flex gap-3 items-center">
+              {coverPreview && (
+                <img 
+                  src={coverPreview} 
+                  alt="Cover preview" 
+                  className="w-14 h-14 rounded-xl object-cover border border-[#1DB954]/40 bg-zinc-800 shrink-0 shadow-md"
+                />
+              )}
+              <div className="flex-1 flex gap-2">
+                <input
+                  type="text"
+                  value={coverUrl}
+                  onChange={(e) => {
+                    setCoverUrl(e.target.value);
+                    setCoverPreview(e.target.value);
+                  }}
+                  placeholder="URL o sube un archivo .jpg/.png a Supabase Storage..."
+                  className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-[#1DB954]"
+                />
+                <button
+                  type="button"
+                  onClick={() => coverInputRef.current?.click()}
+                  className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-medium flex items-center gap-1.5 border border-zinc-700 transition-colors shrink-0"
+                >
+                  <ImageIcon className="w-3.5 h-3.5 text-[#1DB954]" />
+                  <span>{coverFile ? 'Cambiar Imagen' : 'Subir Archivo'}</span>
+                </button>
+                <input
+                  ref={coverInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/*,.jpg,.jpeg,.png,.webp"
+                  onChange={handleCoverFileChange}
+                  className="hidden"
+                />
+              </div>
             </div>
           </div>
 
@@ -271,7 +399,7 @@ export const ArtistUploadModal: React.FC<ArtistUploadModalProps> = ({
           {/* Track Metadata Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block font-semibold text-zinc-300 mb-1">Título de la Obra *</label>
+              <label className="block font-semibold text-zinc-300 mb-1">Título de la Canción / Pista *</label>
               <input
                 type="text"
                 required
@@ -322,35 +450,6 @@ export const ArtistUploadModal: React.FC<ArtistUploadModalProps> = ({
             </div>
           </div>
 
-          {/* Cover image field */}
-          <div className="space-y-1.5">
-            <label className="block font-semibold text-zinc-300">Portada de la Pista (Cover Art)</label>
-            <div className="flex gap-2">
-              <input
-                type="url"
-                value={coverUrl}
-                onChange={(e) => setCoverUrl(e.target.value)}
-                placeholder="https://images.unsplash.com/... o sube una imagen"
-                className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-[#1DB954]"
-              />
-              <button
-                type="button"
-                onClick={() => coverInputRef.current?.click()}
-                className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-medium flex items-center gap-1.5 border border-zinc-700 transition-colors shrink-0"
-              >
-                <ImageIcon className="w-3.5 h-3.5" />
-                <span>Subir Imagen</span>
-              </button>
-              <input
-                ref={coverInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleCoverFileChange}
-                className="hidden"
-              />
-            </div>
-          </div>
-
           {/* Monetization & Ad settings */}
           <div className="bg-zinc-900/90 border border-zinc-800 p-4 rounded-xl space-y-3">
             <div className="flex items-center justify-between">
@@ -391,28 +490,49 @@ export const ArtistUploadModal: React.FC<ArtistUploadModalProps> = ({
             )}
           </div>
 
-          {/* Submit button */}
-          <div className="pt-3 border-t border-zinc-800 flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl text-zinc-400 hover:text-white transition-colors"
-            >
-              Cancelar
-            </button>
+          {/* Submit button & Progress status */}
+          <div className="pt-3 border-t border-zinc-800 flex items-center justify-between gap-3">
+            <div className="text-zinc-400 text-xs flex items-center gap-2">
+              {isUploading && (
+                <>
+                  <Loader2 className="w-4 h-4 text-[#1DB954] animate-spin" />
+                  <span className="text-zinc-300">{uploadProgressText || 'Subiendo archivos...'}</span>
+                </>
+              )}
+            </div>
 
-            <button
-              type="submit"
-              disabled={isUploading || !title}
-              className={`px-6 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all ${
-                isUploading || !title
-                  ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
-                  : 'bg-[#1DB954] hover:bg-[#1ed760] text-black shadow-lg shadow-[#1DB954]/20 hover:scale-105 active:scale-95'
-              }`}
-            >
-              <Sparkles className="w-4 h-4" />
-              <span>{isUploading ? 'Procesando & Transcodificando...' : 'Publicar en Sonora'}</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isUploading}
+                className="px-4 py-2 rounded-xl text-zinc-400 hover:text-white transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="submit"
+                disabled={isUploading || !title}
+                className={`px-6 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all ${
+                  isUploading || !title
+                    ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                    : 'bg-[#1DB954] hover:bg-[#1ed760] text-black shadow-lg shadow-[#1DB954]/20 hover:scale-105 active:scale-95'
+                }`}
+              >
+                {isUploading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Subiendo a Supabase...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    <span>Subir Canción & Publicar</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>
