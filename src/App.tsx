@@ -24,8 +24,8 @@ import { UserProfileModal } from './components/UserProfileModal';
 import { SettingsModal } from './components/SettingsModal';
 
 export default function App() {
-  // Users & Session State
-  const [currentUser, setCurrentUser] = useState<User | null>(INITIAL_USERS[0]); // Starts with session active
+  // Users & Session State (Clean default for visitors, synced via Supabase Auth)
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentTab, setCurrentTab] = useState<'stream' | 'studio' | 'admin' | 'architecture'>('stream');
   
   // Modals
@@ -114,16 +114,35 @@ export default function App() {
           .eq('id', session.user.id)
           .single();
 
-        const role = profile?.role === 'artist' ? 'creator' : profile?.role || 'listener';
+        const storedPreferredRole = localStorage.getItem('sonora_preferred_role');
+        const role = profile?.role === 'artist' || profile?.role === 'creator'
+          ? 'creator'
+          : (storedPreferredRole === 'creator' ? 'creator' : (profile?.role || 'listener'));
+
+        // If newly signed in with Google and user had preferred creator, update profile table
+        if (storedPreferredRole && (!profile || !profile.role)) {
+          client.from('users').upsert([
+            {
+              id: session.user.id,
+              email: session.user.email || '',
+              name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Usuario',
+              role: storedPreferredRole === 'creator' ? 'artist' : 'listener',
+              avatar_url: session.user.user_metadata?.avatar_url || null
+            }
+          ]).then(() => {
+            localStorage.removeItem('sonora_preferred_role');
+          });
+        }
+
         const userObj: User = {
           id: session.user.id,
-          name: profile?.name || session.user.email?.split('@')[0] || 'Usuario',
+          name: profile?.name || session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Usuario',
           stageName: profile?.stage_name || undefined,
           email: session.user.email || profile?.email || '',
           role,
-          avatar: role === 'creator'
+          avatar: session.user.user_metadata?.avatar_url || (role === 'creator'
             ? 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=300&q=80'
-            : 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=300&q=80',
+            : 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=300&q=80'),
           verified: role === 'creator',
           followersCount: 0,
           plan: 'free',
@@ -535,21 +554,17 @@ export default function App() {
         artistAvatar={currentUser?.avatar || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=300&q=80'}
       />
 
-      {/* Dual Auth & Role Switcher Modal with JWT Token Inspector */}
+      {/* Auth Modal: Google OAuth, Email/Password and Role Selection */}
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
-        currentUser={currentUser || INITIAL_USERS[0]}
-        onSelectUser={(u) => {
-          setCurrentUser(u);
-          if (u.role === 'creator') setCurrentTab('studio');
-          else if (u.role === 'admin') setCurrentTab('admin');
-          else setCurrentTab('stream');
-        }}
-        onRegisterUser={(newUser) => {
-          setCurrentUser(newUser);
-          if (newUser.role === 'creator') setCurrentTab('studio');
-          else setCurrentTab('stream');
+        onSuccessAuth={(user) => {
+          setCurrentUser(user);
+          if (user.role === 'creator') {
+            setCurrentTab('studio');
+          } else {
+            setCurrentTab('stream');
+          }
         }}
       />
 

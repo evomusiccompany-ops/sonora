@@ -3,8 +3,6 @@ import { User, UserRole } from '../types';
 import { 
   Headphones, 
   Mic2, 
-  ShieldCheck, 
-  Layers, 
   Wifi, 
   WifiOff, 
   User as UserIcon,
@@ -14,8 +12,6 @@ import {
   LogIn,
   Sliders,
   LogOut,
-  ExternalLink,
-  ShieldAlert,
   UserPlus
 } from 'lucide-react';
 
@@ -84,7 +80,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 PRO
               </span>
             </div>
-            <p className="text-[11px] text-zinc-400 hidden sm:block">Streaming & Creator Studio</p>
+            <p className="text-[11px] text-zinc-400 hidden sm:block">Streaming & Audio Hi-Fi</p>
           </div>
         </div>
 
@@ -92,7 +88,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <button
           onClick={onToggleOffline}
           id="toggle-offline-mode-btn"
-          title="Alternar modo offline (reproducir solo canciones descargadas)"
+          title="Alternar modo offline"
           className={`hidden md:flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-full transition-colors border ${
             isOfflineMode
               ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
@@ -100,72 +96,16 @@ export const Navbar: React.FC<NavbarProps> = ({
           }`}
         >
           {isOfflineMode ? <WifiOff className="w-3.5 h-3.5" /> : <Wifi className="w-3.5 h-3.5" />}
-          <span>{isOfflineMode ? 'Modo Offline Activo' : 'Online'}</span>
+          <span>{isOfflineMode ? 'Modo Offline' : 'Online'}</span>
         </button>
       </div>
 
-      {/* Navigation tabs */}
-      <nav className="flex items-center bg-[#161821] p-1 rounded-xl border border-zinc-800/80 shadow-inner">
-        <button
-          onClick={() => onSelectTab('stream')}
-          id="nav-tab-stream"
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-            currentTab === 'stream'
-              ? 'bg-[#1DB954] text-black shadow-md'
-              : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'
-          }`}
-        >
-          <Headphones className="w-3.5 h-3.5" />
-          <span>Oyente</span>
-        </button>
-
-        <button
-          onClick={() => onSelectTab('studio')}
-          id="nav-tab-studio"
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-            currentTab === 'studio'
-              ? 'bg-[#1DB954] text-black shadow-md'
-              : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'
-          }`}
-        >
-          <Mic2 className="w-3.5 h-3.5" />
-          <span>Panel Creador</span>
-        </button>
-
-        <button
-          onClick={() => onSelectTab('admin')}
-          id="nav-tab-admin"
-          className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-            currentTab === 'admin'
-              ? 'bg-[#1DB954] text-black shadow-md'
-              : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'
-          }`}
-        >
-          <ShieldCheck className="w-3.5 h-3.5" />
-          <span>Admin</span>
-        </button>
-
-        <button
-          onClick={() => onSelectTab('architecture')}
-          id="nav-tab-architecture"
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-            currentTab === 'architecture'
-              ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-md'
-              : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'
-          }`}
-        >
-          <Layers className="w-3.5 h-3.5" />
-          <span className="hidden md:inline">Arquitectura & Backend</span>
-          <span className="md:hidden">Arquit.</span>
-        </button>
-      </nav>
-
-      {/* Right controls: Ad Tracker pill + User profile with Dynamic Dropdown */}
+      {/* Right controls: Ad Tracker pill + User profile with Dynamic Role-Based Dropdown */}
       <div className="flex items-center gap-2.5">
         {/* Ad countdown indicator */}
         <div 
           className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded-lg text-[11px] text-zinc-300"
-          title="Monetización: Anuncio insertado cada ciclo de reproducción"
+          title="Monetización: Ciclo de anuncios para oyentes"
         >
           <Sparkles className="w-3 h-3 text-[#1DB954]" />
           <span>Ad tracker:</span>
@@ -174,7 +114,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Dynamic User Profile / Auth Area */}
         {!currentUser ? (
-          /* Case 1: No active user session -> Login / Register Button */
+          /* Case 1: No active user session -> Clean Login / Register Button */
           <button
             onClick={onOpenAuthModal}
             id="nav-login-btn"
@@ -184,7 +124,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>Iniciar Sesión / Registrarse</span>
           </button>
         ) : (
-          /* Case 2: User with active session -> Avatar + Role + Dropdown Menu */
+          /* Case 2: User with active session -> Avatar + Role + Dynamic Menu */
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
@@ -214,7 +154,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   )}
                 </div>
                 <span className="text-[10px] text-[#1DB954] font-medium capitalize">
-                  {currentUser.role === 'creator' ? 'Artista' : currentUser.role === 'admin' ? 'Admin' : 'Oyente'}
+                  {isCreatorOrArtist ? 'Artista / Creador' : 'Oyente'}
                 </span>
               </div>
               <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 group-hover:text-white transition-transform ${
@@ -222,11 +162,11 @@ export const Navbar: React.FC<NavbarProps> = ({
               }`} />
             </button>
 
-            {/* Dropdown Menu */}
+            {/* Dropdown Menu Dinámico por Perfil / Rol */}
             {isDropdownOpen && (
               <div 
                 id="user-profile-dropdown"
-                className="absolute right-0 mt-2 w-60 bg-[#151722] border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden py-1.5 z-50 animate-fadeIn"
+                className="absolute right-0 mt-2 w-64 bg-[#151722] border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden py-1.5 z-50 animate-fadeIn"
               >
                 {/* User quick card header */}
                 <div className="px-4 py-3 border-b border-zinc-800/80 bg-zinc-900/40">
@@ -249,11 +189,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
                       isCreatorOrArtist
                         ? 'bg-purple-500/10 text-purple-400 border-purple-500/30'
-                        : currentUser.role === 'admin'
-                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
                         : 'bg-emerald-500/10 text-[#1DB954] border-[#1DB954]/30'
                     }`}>
-                      {isCreatorOrArtist ? 'Artista / Creador' : currentUser.role === 'admin' ? 'Administrador' : 'Oyente'}
+                      {isCreatorOrArtist ? 'Creador / Artista' : 'Oyente'}
                     </span>
                     {currentUser.plan === 'premium' && (
                       <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30">
@@ -263,22 +201,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </div>
                 </div>
 
-                {/* Menu Options */}
+                {/* Role-Based Options */}
                 <div className="py-1">
-                  {/* a) Ver Perfil */}
-                  <button
-                    onClick={() => {
-                      setIsDropdownOpen(false);
-                      onOpenProfileModal();
-                    }}
-                    id="menu-opt-profile"
-                    className="w-full px-4 py-2.5 text-xs text-zinc-200 hover:text-white hover:bg-zinc-800/60 flex items-center gap-2.5 transition text-left"
-                  >
-                    <UserIcon className="w-4 h-4 text-zinc-400" />
-                    <span>Ver Perfil</span>
-                  </button>
-
-                  {/* b) Panel de Creador / Studio (Solo visible si es artist o creator) */}
+                  {/* Opción Exclusiva para Creador / Artista */}
                   {isCreatorOrArtist && (
                     <button
                       onClick={() => {
@@ -293,7 +218,20 @@ export const Navbar: React.FC<NavbarProps> = ({
                     </button>
                   )}
 
-                  {/* Configuración */}
+                  {/* Ver Perfil (Disponible para todos) */}
+                  <button
+                    onClick={() => {
+                      setIsDropdownOpen(false);
+                      onOpenProfileModal();
+                    }}
+                    id="menu-opt-profile"
+                    className="w-full px-4 py-2.5 text-xs text-zinc-200 hover:text-white hover:bg-zinc-800/60 flex items-center gap-2.5 transition text-left"
+                  >
+                    <UserIcon className="w-4 h-4 text-zinc-400" />
+                    <span>Ver Perfil</span>
+                  </button>
+
+                  {/* Configuración (Disponible para todos) */}
                   <button
                     onClick={() => {
                       setIsDropdownOpen(false);
@@ -306,23 +244,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <span>Configuración</span>
                   </button>
 
-                  {/* Cambiar cuenta / Modal de autenticación */}
-                  <button
-                    onClick={() => {
-                      setIsDropdownOpen(false);
-                      onOpenAuthModal();
-                    }}
-                    id="menu-opt-auth-switch"
-                    className="w-full px-4 py-2.5 text-xs text-zinc-300 hover:text-white hover:bg-zinc-800/60 flex items-center gap-2.5 transition text-left"
-                  >
-                    <UserPlus className="w-4 h-4 text-zinc-400" />
-                    <span>Cambiar Cuenta / Auth Modal</span>
-                  </button>
-
-                  {/* d) Divider */}
+                  {/* Divider */}
                   <div className="my-1 border-t border-zinc-800/80" />
 
-                  {/* e) Cerrar Sesión */}
+                  {/* Cerrar Sesión */}
                   <button
                     onClick={() => {
                       setIsDropdownOpen(false);
