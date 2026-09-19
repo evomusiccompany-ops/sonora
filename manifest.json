@@ -1,0 +1,14 @@
+{
+  "background_color": "#ffffff",
+  "description": "Plataforma de streaming musical y videoclips con panel de creador, reproductor global, analíticas y simulador de anuncios.",
+  "dir": "ltr",
+  "display": "standalone",
+  "name": "Sonora",
+  "orientation": "any",
+  "scope": "/sonora/",
+  "short_name": "Sonora",
+  "start_url": "/sonora/",
+  "theme_color": "#ffffff",
+  "id": "com.sonora.app",
+  "lang": "es"
+}
