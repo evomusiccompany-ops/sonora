@@ -138,7 +138,7 @@ export const ArtistUploadModal: React.FC<ArtistUploadModalProps> = ({
       setErrorMessage('Por favor ingresa un título para la obra.');
       return;
     }
-
+              
     setIsUploading(true);
     setErrorMessage(null);
 
@@ -204,6 +204,7 @@ export const ArtistUploadModal: React.FC<ArtistUploadModalProps> = ({
 
       setIsUploading(false);
       onClose();
+      window.location.reload();
     } catch (err: any) {
       console.error('Error during upload submission:', err);
       setErrorMessage(err.message || 'Ocurrió un error al subir los archivos.');
